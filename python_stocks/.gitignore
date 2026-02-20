@@ -59,3 +59,13 @@ Thumbs.db
 
 # Logs
 *.log
+.clawhub/
+.openclaw/
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+piml_template.py
+skills/

@@ -1,24 +1,26 @@
 # Python Stocks 📈
 
-Stock analysis and machine learning notebooks.
+Stock analysis and machine learning modules.
 
 ## Description
 
-A collection of Jupyter notebooks for stock market analysis, sentiment analysis, and machine learning.
+A collection of Python modules for stock market analysis, sentiment analysis, and machine learning.
 
-## Notebooks
+## Module Structure
 
-### 1. stocks.ipynb
-Main stock analysis and data processing.
-
-### 2. twitter_sentiment.ipynb
-Twitter sentiment analysis for stock prediction.
-
-### 3. stock_classifier.ipynb
-Machine learning classifier for stock categories.
-
-### 4. ARK_holdings.ipynb
-Analysis of ARK ETF holdings (ARKK, ARKQ, ARKW, ARKG, ARKF).
+```
+python_stocks/
+├── src/
+│   ├── __init__.py          # Package exports
+│   ├── ark_fetcher.py       # ARK ETF holdings fetcher
+│   ├── stock_data.py        # Stock data fetching & technical indicators
+│   └── sentiment.py         # Sentiment analysis for stocks
+├── data/                    # Data storage directory
+├── notebooks/               # Jupyter notebooks
+├── requirements.txt         # Python dependencies
+├── .gitignore              # Git ignore rules
+└── README.md               # This file
+```
 
 ## Installation
 
@@ -38,19 +40,66 @@ pip install -r requirements.txt
 
 ## Usage
 
-Open any notebook in Jupyter:
+### ARK ETF Holdings
 
-```bash
-jupyter notebook
+```python
+from src.ark_fetcher import ARKDataFetcher
+
+fetcher = ARKDataFetcher()
+
+# Get single ETF
+arkk = fetcher.get_holding('ARKK')
+
+# Get all ETFs
+all_holdings = fetcher.get_all_holdings()
+
+fetcher.close()
 ```
 
-Or use JupyterLab:
+### Stock Data
 
-```bash
-jupyter lab
+```python
+from src.stock_data import StockDataFetcher, TechnicalIndicators
+
+fetcher = StockDataFetcher()
+
+# Get price data
+aapl = fetcher.get_price('AAPL', period='1y')
+
+# Calculate indicators
+close = aapl['Close']
+sma_20 = TechnicalIndicators.sma(close, 20)
+rsi = TechnicalIndicators.rsi(close)
+macd, signal, hist = TechnicalIndicators.macd(close)
+
+fetcher.close()
+```
+
+### Sentiment Analysis
+
+```python
+from src.sentiment import SentimentAnalyzer
+
+analyzer = SentimentAnalyzer()
+
+# Analyze text
+result = analyzer.analyze_textblob("Stock is going up!")
+print(result)  # {'polarity': 0.5, 'subjectivity': 0.5, 'sentiment': 'positive'}
+
+# Batch analysis
+texts = ["Good news", "Bad news", "Neutral"]
+df = analyzer.analyze_batch_textblob(texts)
 ```
 
 ## Requirements
+
+- Python 3.8+
+- numpy
+- pandas
+- requests
+- yfinance (for stock data)
+- textblob (for basic sentiment)
+- transformers (optional, for advanced sentiment)
 
 See `requirements.txt` for full list.
 
