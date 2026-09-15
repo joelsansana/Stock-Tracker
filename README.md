@@ -29,12 +29,23 @@ Stock-Tracker/
 │       ├── ark_fetcher.py
 │       ├── stock_data.py
 │       └── sentiment.py
+├── app/                       # Streamlit UI
+│   ├── Home.py
+│   ├── pages/
+│   │   ├── 1_ARK_Holdings.py
+│   │   ├── 2_Stock_Analysis.py
+│   │   ├── 3_Sentiment_Lab.py        # stub
+│   │   ├── 4_Twitter_Sentiment.py    # stub
+│   │   └── 5_Status.py
+│   └── components/
 ├── tests/
+├── docs/
+│   └── WEB_UI.md              # web UI design doc
 ├── notebooks/
 │   └── stock_analysis_example.ipynb
-├── pyproject.toml         # installable via pip
-├── requirements.txt       # runtime deps (extras in pyproject.toml)
-├── LICENSE                # MIT
+├── pyproject.toml             # installable via pip
+├── requirements.txt           # runtime deps (extras in pyproject.toml)
+├── LICENSE                    # MIT
 ├── README.md
 └── .gitignore
 ```
@@ -54,6 +65,8 @@ pip install -e .
 pip install -e ".[dev]"            # tests + matplotlib + notebook deps
 pip install -e ".[transformers]"   # Hugging Face sentiment backend
 pip install -e ".[twitter]"        # Twitter API v2 client
+pip install -e ".[ui]"             # Streamlit web UI
+pip install -e ".[streamlit]"      # all UI extras combined
 ```
 
 The package is named `python_stocks` so all imports below resolve to
@@ -124,6 +137,25 @@ df = fetcher.analyze_stock_sentiment("AAPL", count=100)
 pip install -e ".[dev]"
 pytest
 ```
+
+## Web UI
+
+A Streamlit UI lives in `app/`. After installing the `[ui]` extra:
+
+```bash
+streamlit run app/Home.py
+```
+
+It currently ships:
+
+- **Home** — backend status overview
+- **ARK Holdings** — browse ARK ETF holdings with treemap/bar charts and CSV download
+- **Stock Analysis** — candlestick + technical indicators (SMA, EMA, Bollinger, RSI, MACD) and multi-ticker compare
+- **Sentiment Lab, Twitter Sentiment** — stubbed; see [`docs/WEB_UI.md`](docs/WEB_UI.md)
+- **Status** — diagnostic info
+
+Twitter credentials are read from `.streamlit/secrets.toml` (see
+`.streamlit/secrets.toml.example`) or the `TWEET_BEARER_TOKEN` env var.
 
 ## Requirements
 
