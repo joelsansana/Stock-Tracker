@@ -1,111 +1,140 @@
 # Python Stocks 📈
 
-Stock analysis and machine learning modules.
+Stock analysis toolkit: ARK ETF holdings, market data, technical
+indicators, and sentiment analysis.
 
-## Description
+> **Note:** This is the package formerly known as `python_stocks`. The
+> importable package name is now `python_stocks` (the source lives in
+> `src/python_stocks/`).
 
-A collection of Python modules for stock market analysis, sentiment analysis, and machine learning.
+## Features
 
-## Module Structure
+- **ARK ETF holdings** — download and cache holdings CSVs for ARKK,
+  ARKQ, ARKW, ARKG, ARKF from ark-funds.com (`ARKDataFetcher`).
+- **Market data** — pull OHLCV history via `yfinance` with optional
+  CSV caching (`StockDataFetcher`).
+- **Technical indicators** — SMA, EMA, Wilder's RSI, MACD, Bollinger
+  Bands (`TechnicalIndicators`).
+- **Sentiment** — lexicon (TextBlob) and neural (Hugging Face)
+  backends, plus a Twitter v2 fetcher (`SentimentAnalyzer`,
+  `StockSentimentFetcher`).
+
+## Repository layout
 
 ```
-python_stocks/
+Stock-Tracker/
 ├── src/
-│   ├── __init__.py          # Package exports
-│   ├── ark_fetcher.py       # ARK ETF holdings fetcher
-│   ├── stock_data.py        # Stock data fetching & technical indicators
-│   └── sentiment.py         # Sentiment analysis for stocks
-├── data/                    # Data storage directory
-├── notebooks/               # Jupyter notebooks
-├── requirements.txt         # Python dependencies
-├── .gitignore              # Git ignore rules
-└── README.md               # This file
+│   └── python_stocks/
+│       ├── __init__.py
+│       ├── ark_fetcher.py
+│       ├── stock_data.py
+│       └── sentiment.py
+├── tests/
+├── notebooks/
+│   └── stock_analysis_example.ipynb
+├── pyproject.toml         # installable via pip
+├── requirements.txt       # runtime deps (extras in pyproject.toml)
+├── LICENSE                # MIT
+├── README.md
+└── .gitignore
 ```
 
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/joelsansana/python_stocks.git
-cd python_stocks
+cd Stock-Tracker
+python3 -m venv .venv
+source .venv/bin/activate
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate  # Windows
+# Core install (small):
+pip install -e .
 
-# Install dependencies
-pip install -r requirements.txt
+# Optional extras:
+pip install -e ".[dev]"            # tests + matplotlib + notebook deps
+pip install -e ".[transformers]"   # Hugging Face sentiment backend
+pip install -e ".[twitter]"        # Twitter API v2 client
 ```
+
+The package is named `python_stocks` so all imports below resolve to
+`from python_stocks import ...`.
 
 ## Usage
 
-### ARK ETF Holdings
+### ARK ETF holdings
 
 ```python
-from src.ark_fetcher import ARKDataFetcher
+from python_stocks import ARKDataFetcher
 
-fetcher = ARKDataFetcher()
-
-# Get single ETF
-arkk = fetcher.get_holding('ARKK')
-
-# Get all ETFs
-all_holdings = fetcher.get_all_holdings()
-
-fetcher.close()
+with ARKDataFetcher(data_dir="data") as fetcher:
+    arkk = fetcher.get_holding("ARKK")
+    all_holdings = fetcher.get_all_holdings()  # parallel download
 ```
 
-### Stock Data
+### Stock data & technical indicators
 
 ```python
-from src.stock_data import StockDataFetcher, TechnicalIndicators
+from python_stocks import StockDataFetcher, TechnicalIndicators
 
-fetcher = StockDataFetcher()
-
-# Get price data
-aapl = fetcher.get_price('AAPL', period='1y')
-
-# Calculate indicators
-close = aapl['Close']
-sma_20 = TechnicalIndicators.sma(close, 20)
-rsi = TechnicalIndicators.rsi(close)
-macd, signal, hist = TechnicalIndicators.macd(close)
-
-fetcher.close()
+with StockDataFetcher(data_dir="data") as fetcher:
+    aapl = fetcher.get_price("AAPL", period="1y")
+    close = aapl["Close"]
+    sma_20 = TechnicalIndicators.sma(close, 20)
+    rsi_14 = TechnicalIndicators.rsi(close)            # Wilder's smoothing
+    macd, signal, hist = TechnicalIndicators.macd(close)
+    upper, middle, lower = TechnicalIndicators.bollinger_bands(close)
 ```
 
-### Sentiment Analysis
+### Sentiment analysis
 
 ```python
-from src.sentiment import SentimentAnalyzer
+from python_stocks import SentimentAnalyzer
 
-analyzer = SentimentAnalyzer()
+analyzer = SentimentAnalyzer()            # picks the best available backend
+print(analyzer.backend)                    # "huggingface" | "textblob" | "none"
 
-# Analyze text
 result = analyzer.analyze_textblob("Stock is going up!")
-print(result)  # {'polarity': 0.5, 'subjectivity': 0.5, 'sentiment': 'positive'}
+# {'polarity': 0.5, 'subjectivity': 0.5, 'sentiment': 'positive'}
 
-# Batch analysis
-texts = ["Good news", "Bad news", "Neutral"]
-df = analyzer.analyze_batch_textblob(texts)
+df = analyzer.analyze_batch_textblob(["Good news", "Bad news", "Neutral"])
+print(analyzer.aggregate_sentiment(df))
+```
+
+For finance-tuned neural sentiment, pass a FinBERT model:
+
+```python
+analyzer = SentimentAnalyzer(hf_model="ProsusAI/finbert")
+```
+
+### Twitter sentiment
+
+The Twitter fetcher uses the **v2 API** (v1.1 was retired by Twitter in
+2023). Set `TWEET_BEARER_TOKEN` in your environment, then:
+
+```python
+from python_stocks import StockSentimentFetcher
+
+fetcher = StockSentimentFetcher()
+df = fetcher.analyze_stock_sentiment("AAPL", count=100)
+```
+
+## Running the tests
+
+```bash
+pip install -e ".[dev]"
+pytest
 ```
 
 ## Requirements
 
-- Python 3.8+
-- numpy
-- pandas
-- requests
-- yfinance (for stock data)
-- textblob (for basic sentiment)
-- transformers (optional, for advanced sentiment)
-
-See `requirements.txt` for full list.
+Python 3.8+. Runtime dependencies are listed in
+[`requirements.txt`](requirements.txt); everything heavier
+(`transformers`, `torch`, `tweepy`, …) lives in optional extras in
+[`pyproject.toml`](pyproject.toml).
 
 ## License
 
-MIT License - See LICENSE file.
+[MIT](LICENSE) © Joel Sansana.
 
 ## Author
 
