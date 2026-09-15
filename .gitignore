@@ -61,3 +61,7 @@ data/
 *.pem
 # Streamlit secrets (local only)
 .streamlit/secrets.toml
+
+# Tool runtime
+.agents/
+.claude/

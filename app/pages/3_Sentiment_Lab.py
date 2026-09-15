@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import pandas as pd
 import streamlit as st
 
@@ -103,8 +104,10 @@ def main() -> None:
                 hf_pipeline = sentiment_models.load_hf_pipeline(preset, device)
             if hf_pipeline.available:
                 st.sidebar.success(f"{preset} loaded")
+                st.toast(f"Loaded {preset}", icon="🤖")
             else:
                 st.sidebar.error("Model failed to load")
+                st.toast("Model failed to load — check the sidebar for details", icon="❌")
         # Reuse an already-cached pipeline across reruns.
         if hf_pipeline is None and analyzer.huggingface.available:
             hf_pipeline = analyzer.huggingface
@@ -219,10 +222,12 @@ def _render_batch(
         merged = pd.concat([df.reset_index(drop=True), scored.reset_index(drop=True)], axis=1)
         st.session_state["scored_df"] = merged
         st.session_state["scored_backend"] = backend_choice
+        st.toast(f"Scored {len(merged)} rows with {backend_choice}", icon="✅")
 
     if "scored_df" in st.session_state:
         merged = st.session_state["scored_df"]
         backend_used = st.session_state.get("scored_backend", "?")
+        # Persistent banner keeps context; toast above is the ephemeral confirm.
         st.success(f"Scored {len(merged)} rows with {backend_used}.")
 
         if "sentiment" in merged.columns:

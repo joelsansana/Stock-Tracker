@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import pandas as pd
 import streamlit as st
 
@@ -82,7 +83,16 @@ def _render_single(period: str, interval: str, indicators: dict[str, bool]) -> N
 
     df = fetch_price(raw_ticker, period, interval)
     if df is None or df.empty:
-        st.error(f"No data returned for {raw_ticker} (period={period}, interval={interval}).")
+        st.error(
+            f"No data returned for **{raw_ticker}** "
+            f"(period=`{period}`, interval=`{interval}`)."
+        )
+        st.info(
+            "Troubleshooting:\n"
+            "- Check the ticker is valid on Yahoo Finance.\n"
+            "- Some tickers don't support intervals smaller than `1d`.\n"
+            "- Intraday data (`1m`, `5m`, `15m`, etc.) is limited to the last 60 days."
+        )
         return
 
     df = _decorate(df, indicators)

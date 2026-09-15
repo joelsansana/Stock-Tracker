@@ -153,10 +153,38 @@ It currently ships:
 - **Stock Analysis** — candlestick + technical indicators (SMA, EMA, Bollinger, RSI, MACD) and multi-ticker compare
 - **Sentiment Lab** — score text with TextBlob and Hugging Face; single text or batch CSV
 - **Twitter Sentiment** — fetch recent tweets via Twitter API v2 and score them
-- **Status** — diagnostic info
+- **Status** — diagnostic info, cache maintenance, data folder
 
 Twitter credentials are read from `.streamlit/secrets.toml` (see
 `.streamlit/secrets.toml.example`) or the `TWEET_BEARER_TOKEN` env var.
+
+### Running locally
+
+The UI works regardless of the directory you launch Streamlit from —
+each page imports `app/_bootstrap.py` first, which adds the project
+root to `sys.path`. Just make sure you installed the package first:
+
+```bash
+git clone https://github.com/joelsansana/python_stocks.git
+cd Stock-Tracker
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[ui,dev]"   # or "[streamlit]" for everything
+
+streamlit run app/Home.py
+```
+
+Then open <http://localhost:8501>.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `ModuleNotFoundError: No module named 'app'` | Make sure `app/_bootstrap.py` exists and is the first import in every page (it should be — don't reorder). |
+| `ModuleNotFoundError: No module named 'python_stocks'` | You didn't install the package. Run `pip install -e .` (or one of the extras). |
+| ARK page shows "Could not fetch ARKK" | ARK may have changed their CSV URL — check `ARK_ETF_URLS` in `src/python_stocks/ark_fetcher.py`. |
+| Stock page shows "No data returned" | Verify the ticker on Yahoo Finance; some intervals are limited to recent data. |
+| Twitter page asks for a bearer token | Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in `TWEET_BEARER_TOKEN`. |
+| Hugging Face model never loads | First load downloads ~250 MB. Check the Status page to confirm `transformers` is installed. |
 
 ## Requirements
 

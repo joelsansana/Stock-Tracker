@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import pandas as pd
 import streamlit as st
 
@@ -74,13 +75,20 @@ def main() -> None:
                 df = fetcher.analyze_stock_sentiment(raw_ticker, count=count)
             except Exception as exc:  # tweepy raises varied exceptions
                 st.error(f"Twitter fetch failed: {exc}")
+                st.info(
+                    "Common causes:\n"
+                    "- Bearer token expired or revoked.\n"
+                    "- Twitter v2 free tier rate limits hit.\n"
+                    "- Network/DNS issue. Check Status page for details."
+                )
                 return
         if df is None or df.empty:
-            st.warning(f"No tweets returned for ${raw_ticker}.")
+            st.warning(f"No tweets returned for **${raw_ticker}** in the last 7 days.")
             st.session_state["twitter_df"] = pd.DataFrame()
             return
         st.session_state["twitter_df"] = df
         st.session_state["twitter_ticker"] = raw_ticker
+        st.toast(f"Fetched {len(df)} tweets for ${raw_ticker}", icon="🐦")
 
     df = st.session_state["twitter_df"]
     if df.empty:

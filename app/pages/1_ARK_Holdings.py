@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import pandas as pd
 import streamlit as st
 
@@ -97,16 +98,31 @@ def main() -> None:
 
     df = fetch_ark(ticker, force_refresh)
     if df is None or df.empty:
-        st.error(f"Could not fetch {ticker}. Check the URL or your network.")
+        st.error(
+            f"Could not fetch **{ticker}** holdings. "
+            "ARK's CSV URL may have changed or your network is offline."
+        )
+        st.info(
+            "Troubleshooting:\n"
+            "1. Check the URL in `src/python_stocks/ark_fetcher.py` "
+            f"(`ARK_ETF_URLS['{ticker}']`).\n"
+            "2. Open it in a browser to confirm it's still valid.\n"
+            "3. Click **Force refresh** in the sidebar to retry.\n"
+            "4. Or run `python -c \"from python_stocks import "
+            f"ARKDataFetcher; ARKDataFetcher().get_holding('{ticker}', "
+            "force_refresh=True)\"` to see the full error."
+        )
         st.stop()
 
     norm = _normalize(df)
     if norm["weight"].notna().sum() == 0:
         st.warning(
-            "No weight column detected. Showing the raw CSV instead — "
-            f"columns: {list(df.columns)}"
+            "ARK may have changed its column naming — no weight column "
+            "detected. Showing the raw CSV below. If you can identify the "
+            "right column, please open an issue."
         )
         st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption(f"Columns found: `{list(df.columns)}`")
         st.stop()
 
     norm = norm.sort_values("weight", ascending=False).reset_index(drop=True)

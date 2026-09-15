@@ -5,6 +5,7 @@ from __future__ import annotations
 import platform
 import sys
 
+import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import streamlit as st
 
 from app.components.cache import data_dir
@@ -47,6 +48,28 @@ def main() -> None:
         st.dataframe(rows, use_container_width=True, hide_index=True)
     else:
         st.caption("No cached CSVs yet.")
+
+    st.divider()
+    st.markdown("### Maintenance")
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Clear in-memory cache", help="Forget all @st.cache_data results. Disk cache untouched."):
+        st.cache_data.clear()
+        st.toast("In-memory cache cleared", icon="🧹")
+        st.rerun()
+    if c2.button(
+        "Delete ARK CSVs", help="Remove cached ARK ETF CSV files. They will be re-downloaded on next visit."
+    ):
+        removed = 0
+        for p in d.glob("*_holdings.csv"):
+            try:
+                p.unlink()
+                removed += 1
+            except OSError:
+                pass
+        st.toast(f"Deleted {removed} CSV file(s)", icon="🗑️")
+        st.rerun()
+    if c3.button("Show data path", help="Show the absolute path of the data directory."):
+        st.code(str(d.resolve()), language="text")
 
 
 def pd_mtime(ts: float) -> str:

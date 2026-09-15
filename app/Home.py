@@ -7,6 +7,7 @@ Run with::
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import streamlit as st
 
 from app.components.shared import (
