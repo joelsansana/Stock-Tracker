@@ -81,7 +81,10 @@ line-length = 100
 # UP006 (Dict -> dict) and UP045 (Optional[X] -> X | None) target Python 3.9+.
 # We require 3.8, so the older typing.* names are intentional.
 ignore = ["UP006", "UP045", "PYI034"]
+
+[tool.ruff.lint.per-file-ignores]
 # BLE001 (bare except Exception) is acceptable in glue code around third-party
 # libraries (yfinance, textblob, tweepy, transformers) that raise varied
 # exception hierarchies; catching broadly and logging is the right call.
-per-file-ignores = { "src/python_stocks/*.py" = ["BLE001"] }
+"src/python_stocks/*.py" = ["BLE001"]
+"app/pages/*.py" = ["BLE001"]

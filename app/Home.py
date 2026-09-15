@@ -53,9 +53,9 @@ def main() -> None:
         |---|---|
         | **ARK Holdings** | Browse ARK Invest ETF holdings (ARKK, ARKQ, ARKW, ARKG, ARKF). |
         | **Stock Analysis** | OHLCV chart + technical indicators for any symbol. |
-        | **Sentiment Lab** | *(planned)* Score text with TextBlob and Hugging Face. |
-        | **Twitter Sentiment** | *(planned)* Live tweet sentiment for a ticker. |
-        | **Status** | *(planned)* Diagnostic info about this installation. |
+        | **Sentiment Lab** | Score text with TextBlob and Hugging Face; single text or batch CSV. |
+        | **Twitter Sentiment** | Live tweet sentiment for a ticker (Twitter API v2). |
+        | **Status** | Diagnostic info about this installation. |
 
         See [`docs/WEB_UI.md`](../docs/WEB_UI.md) for the full design doc.
         """

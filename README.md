@@ -151,7 +151,8 @@ It currently ships:
 - **Home** — backend status overview
 - **ARK Holdings** — browse ARK ETF holdings with treemap/bar charts and CSV download
 - **Stock Analysis** — candlestick + technical indicators (SMA, EMA, Bollinger, RSI, MACD) and multi-ticker compare
-- **Sentiment Lab, Twitter Sentiment** — stubbed; see [`docs/WEB_UI.md`](docs/WEB_UI.md)
+- **Sentiment Lab** — score text with TextBlob and Hugging Face; single text or batch CSV
+- **Twitter Sentiment** — fetch recent tweets via Twitter API v2 and score them
 - **Status** — diagnostic info
 
 Twitter credentials are read from `.streamlit/secrets.toml` (see

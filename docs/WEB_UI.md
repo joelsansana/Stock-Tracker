@@ -78,17 +78,35 @@ Five pages total. MVP ships the first two.
 - **Compare tickers** toggle → normalized price overlay for 2–5
   tickers.
 
-### 4. Sentiment Lab (post-MVP)
+### 4. Sentiment Lab
 
 Two-pane: TextBlob vs HuggingFace, side-by-side. Text area + sample
 buttons. Model selector (default + FinBERT option if installed). Batch
 mode: upload CSV → download scored CSV.
 
-### 5. Twitter Sentiment (post-MVP)
+- **Sidebar:** mode (single text / batch CSV), HF model preset
+  (`default` = DistilBERT SST-2, `finbert` = ProsusAI/FinBERT), device
+  toggle (CPU/GPU), "Load model" button (HF pipelines are loaded once
+  via `@st.cache_resource`).
+- **Single mode:** sample-text buttons populate the textarea. Each pane
+  shows the label, polarity bar (-1..+1) or score bar (0..1), and a
+  metric strip.
+- **Batch mode:** CSV uploader → column selector → backend pick → run.
+  Result is a merged DataFrame (original columns + sentiment columns)
+  with counts and a CSV download button.
+
+### 5. Twitter Sentiment
 
 Ticker input, max-tweets slider (cap 100, v2 limit), filterable tweet
 table, aggregate stats card. Clear error if `TWEET_BEARER_TOKEN`
 missing.
+
+- **Empty state:** explicit error pointing at
+  `.streamlit/secrets.toml` or `TWEET_BEARER_TOKEN`.
+- **Filter:** radio to show all / positive / neutral / negative rows.
+- **Columns:** posted, user, tweet text, sentiment label, retweets,
+  likes.
+- **Export:** download the full scored DataFrame as CSV.
 
 ### 6. Status
 
@@ -163,15 +181,32 @@ installing the `[streamlit]` meta-extra so all backends are available.
 
 ## Phased delivery
 
-| Phase | Scope | Effort |
-|---|---|---|
-| **MVP** | Home + ARK Holdings + Stock Analysis | 1–2 days |
-| **v1** | + Sentiment Lab, Status page | +1 day |
-| **v1.1** | + Twitter Sentiment, multi-ticker compare | +1 day |
-| **Polish** | Error toasts, empty states, light/dark, README updates | +1 day |
-| **Deploy** | Community Cloud + secrets + CI smoke test | 0.5 day |
+| Phase | Scope | Effort | Status |
+|---|---|---|---|
+| **MVP** | Home + ARK Holdings + Stock Analysis | 1–2 days | ✅ shipped |
+| **v1** | + Sentiment Lab, Status page | +1 day | ✅ shipped |
+| **v1.1** | + Twitter Sentiment, multi-ticker compare | +1 day | ✅ shipped |
+| **Polish** | Error toasts, empty states, light/dark, README updates | +1 day | pending |
+| **Deploy** | Community Cloud + secrets + CI smoke test | 0.5 day | pending |
 
 Total to a useful v1: ~3 working days.
+
+## What's shipped so far
+
+**MVP (committed):** Home, ARK Holdings, Stock Analysis (single +
+compare), stub pages for the rest.
+
+**v1 + v1.1 (committed):** Sentiment Lab (single text + batch CSV +
+HF model loader), Twitter Sentiment (full implementation), Status
+page. Helper modules:
+
+- `app/components/sentiment_models.py` — `@st.cache_resource`-wrapped
+  Hugging Face pipeline loader with `default` and `finbert` presets.
+- `app/components/twitter_helpers.py` — `classify_sentiment` and
+  `aggregate_counts` (extracted from the page so they're unit-tested).
+
+Test counts: 48 passed (10 new tests for the helper modules and
+headless smoke tests of the new pages).
 
 ## Risks & open questions
 
