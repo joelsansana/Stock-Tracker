@@ -21,13 +21,13 @@ from app.components.shared import (
 
 def main() -> None:
     st.set_page_config(
-        page_title="python_stocks",
+        page_title="Stock Tracker",
         page_icon=":chart_with_upwards_trend:",
         layout="wide",
     )
 
     sidebar_nav()
-    st.title("python_stocks :chart_with_upwards_trend:")
+    st.title("Stock Tracker :chart_with_upwards_trend:")
     st.caption(f"v{package_version()} — stock analysis toolkit")
 
     status = backend_status()
