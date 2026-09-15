@@ -10,7 +10,7 @@ indicators, and sentiment analysis.
 ## Features
 
 - **ARK ETF holdings** — download and cache holdings CSVs for ARKK,
-  ARKQ, ARKW, ARKG, ARKF from ark-funds.com (`ARKDataFetcher`).
+  ARKQ, ARKW, ARKG, ARKF, ARKX from ark-funds.com (`ARKDataFetcher`).
 - **Market data** — pull OHLCV history via `yfinance` with optional
   CSV caching (`StockDataFetcher`).
 - **Technical indicators** — SMA, EMA, Wilder's RSI, MACD, Bollinger

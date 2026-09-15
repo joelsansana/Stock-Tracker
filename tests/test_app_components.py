@@ -107,3 +107,137 @@ def test_data_dir_creates_directory(tmp_path, monkeypatch) -> None:
     result = cache_mod.data_dir()
     assert result.exists()
     assert result.is_dir()
+
+
+# --- Holdings chart label resolution -----------------------------------------
+
+
+def _trace_labels(fig) -> list[str]:
+    """Extract the y-categories or treemap labels from a Plotly figure."""
+    trace = fig.data[0]
+    # px.bar(orientation='h') sets y as categorical.
+    if hasattr(trace, "y") and trace.y is not None:
+        return list(trace.y)
+    # px.treemap sets labels as the leaf ids.
+    if hasattr(trace, "labels"):
+        return list(trace.labels)
+    return []
+
+
+def test_holdings_bar_prefers_ticker_column() -> None:
+    """When both ticker and company are present, the chart uses the ticker."""
+    df = pd.DataFrame(
+        {
+            "ticker": ["TSLA", "COIN"],
+            "company": ["Tesla Inc", "Coinbase"],
+            "weight": [12.5, 7.5],
+        }
+    )
+    fig = charts.holdings_bar(df, value_col="weight")
+    labels = _trace_labels(fig)
+    assert "TSLA" in labels
+    assert "COIN" in labels
+    assert "Tesla Inc" not in labels
+    assert "Coinbase" not in labels
+
+
+def test_holdings_treemap_prefers_ticker_column() -> None:
+    """Same behavior for the treemap variant."""
+    df = pd.DataFrame(
+        {
+            "ticker": ["TSLA", "COIN"],
+            "company": ["Tesla Inc", "Coinbase"],
+            "weight": [12.5, 7.5],
+        }
+    )
+    fig = charts.holdings_treemap(df, value_col="weight")
+    labels = _trace_labels(fig)
+    assert "TSLA" in labels
+    assert "COIN" in labels
+    assert "Tesla Inc" not in labels
+
+
+def test_holdings_bar_falls_back_to_company() -> None:
+    """If no ticker column is present, fall back to a name column."""
+    df = pd.DataFrame(
+        {
+            "company": ["Tesla Inc", "Coinbase"],
+            "shares": [1000, 500],
+            "weight": [12.5, 7.5],
+        }
+    )
+    fig = charts.holdings_bar(df, value_col="weight")
+    labels = _trace_labels(fig)
+    assert "Tesla Inc" in labels
+    assert "Coinbase" in labels
+
+
+def test_holdings_bar_accepts_symbol_column() -> None:
+    """``symbol`` is the second ticker candidate after ``ticker``."""
+    df = pd.DataFrame(
+        {
+            "symbol": ["TSLA", "COIN"],
+            "weight": [12.5, 7.5],
+        }
+    )
+    fig = charts.holdings_bar(df, value_col="weight")
+    labels = _trace_labels(fig)
+    assert "TSLA" in labels
+    assert "COIN" in labels
+
+
+def test_holdings_bar_honors_explicit_name_col() -> None:
+    """An explicit ``name_col`` always wins over the candidates."""
+    df = pd.DataFrame(
+        {
+            "ticker": ["TSLA", "COIN"],
+            "company": ["Tesla Inc", "Coinbase"],
+            "weight": [12.5, 7.5],
+        }
+    )
+    fig = charts.holdings_bar(df, value_col="weight", name_col="company")
+    labels = _trace_labels(fig)
+    assert "Tesla Inc" in labels
+    assert "Coinbase" in labels
+    assert "TSLA" not in labels
+
+
+def test_holdings_bar_sums_duplicate_tickers() -> None:
+    """Multiple rows with the same ticker are summed into one bar.
+
+    ARK CSVs include duplicate tickers for share classes and warrants;
+    we must aggregate so the bar chart has one entry per ticker.
+    """
+    df = pd.DataFrame(
+        {
+            "ticker": ["TSLA", "TSLA", "COIN"],
+            "weight": [5.0, 7.5, 12.0],
+        }
+    )
+    fig = charts.holdings_bar(df, value_col="weight")
+    labels = _trace_labels(fig)
+    # Duplicate is collapsed.
+    assert labels.count("TSLA") == 1
+    # x values should be the aggregated weight (sum of the two TSLA rows).
+    xs = list(fig.data[0].x)
+    assert pytest.approx(12.5) in xs
+    assert pytest.approx(12.0) in xs
+
+
+def test_holdings_treemap_drops_nan_tickers() -> None:
+    """Rows with NaN tickers (private placements, warrants) are dropped.
+
+    Otherwise Plotly treats them as a non-leaf internal node and raises.
+    """
+    df = pd.DataFrame(
+        {
+            "ticker": ["TSLA", None, "COIN"],
+            "weight": [10.0, 1.0, 12.0],
+        }
+    )
+    fig = charts.holdings_treemap(df, value_col="weight")
+    labels = _trace_labels(fig)
+    assert "TSLA" in labels
+    assert "COIN" in labels
+    assert None not in labels
+    assert "" not in labels

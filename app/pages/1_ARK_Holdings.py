@@ -144,8 +144,6 @@ def main() -> None:
         display["market_value"] = display["market_value"].map(
             lambda x: f"${x:,.0f}" if pd.notna(x) else "—"
         )
-    if display["shares"].dtype.kind in "fiu":
-        display["shares"] = display["shares"].map(lambda x: f"{x:,.0f}" if pd.notna(x) else "—")
 
     st.subheader("Holdings")
     st.dataframe(
@@ -155,7 +153,6 @@ def main() -> None:
         column_config={
             "ticker": st.column_config.TextColumn("Ticker"),
             "company": st.column_config.TextColumn("Company"),
-            "shares": st.column_config.TextColumn("Shares"),
             "market_value": st.column_config.TextColumn("Market value"),
             "weight": st.column_config.TextColumn("Weight"),
         },

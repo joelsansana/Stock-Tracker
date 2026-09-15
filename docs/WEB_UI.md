@@ -62,7 +62,7 @@ Five pages total. MVP ships the first two.
 
 ### 2. ARK Holdings (MVP)
 
-- **Sidebar:** ETF selector (ARKK / ARKQ / ARKW / ARKG / ARKF),
+- **Sidebar:** ETF selector (ARKK / ARKQ / ARKW / ARKG / ARKF / ARKX),
   "force refresh" checkbox, cache age display.
 - **KPI strip:** # holdings, top-10 concentration %.
 - **Treemap** or horizontal bar of weights (Plotly).

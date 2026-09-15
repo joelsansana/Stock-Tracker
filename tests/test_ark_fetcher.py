@@ -113,3 +113,24 @@ def test_all_known_etfs_have_urls() -> None:
     for ticker, url in ARK_ETF_URLS.items():
         assert ticker.isupper()
         assert url.startswith("https://")
+
+
+def test_arkx_is_in_supported_etfs() -> None:
+    """ARKX (Space Exploration & Innovation) must be in the supported set."""
+    assert "ARKX" in ARK_ETF_URLS
+    assert ARK_ETF_URLS["ARKX"].startswith("https://")
+
+
+@pytest.mark.parametrize(
+    "ticker",
+    ["ARKK", "ARKQ", "ARKW", "ARKG", "ARKF", "ARKX"],
+)
+def test_get_holding_rejects_unknown_tickers_only(ticker: str, fetcher: ARKDataFetcher, monkeypatch) -> None:
+    """Each known ticker is dispatched through the URL map; mock returns a valid CSV."""
+    csv = b"company,ticker,shares,market value,weight\nFoo,Foo,1,1,1.0\n"
+    monkeypatch.setattr(
+        fetcher.session, "get", lambda url, timeout: _mock_response(csv)
+    )
+    df = fetcher.get_holding(ticker)
+    assert df is not None
+    assert len(df) == 1

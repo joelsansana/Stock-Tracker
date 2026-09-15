@@ -15,27 +15,78 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+# Columns we try in order to find a tickers-style label for holdings
+# charts. The first one present wins.
+_TICKER_CANDIDATES = ("ticker", "symbol", "cusip")
+# Fallback: human-readable names.
+_NAME_CANDIDATES = ("company", "name", "fund name", "holding")
+
+
+def _pick_label_col(df: pd.DataFrame, value_col: str, explicit: Optional[str]) -> Optional[str]:
+    """Resolve the label column for a holdings chart.
+
+    Preference order:
+
+    1. ``explicit`` (caller override).
+    2. A ticker-style column (``ticker`` / ``symbol`` / ``cusip``).
+    3. A human-readable name column.
+    4. ``None`` — caller should fall back to the index.
+    """
+    if explicit is not None and explicit in df.columns:
+        return explicit
+    for cand in _TICKER_CANDIDATES:
+        if cand in df.columns and cand != value_col:
+            return cand
+    for cand in _NAME_CANDIDATES:
+        if cand in df.columns and cand != value_col:
+            return cand
+    return None
+
+
+def _ensure_label(df: pd.DataFrame, value_col: str, name_col: Optional[str]) -> tuple[pd.DataFrame, str]:
+    """Return ``(df, name_col)`` ready for plotting.
+
+    If no usable label column exists, fabricate one from the index so
+    Plotly always has something to label with.
+    """
+    if name_col is None:
+        df = df.copy()
+        df["__name__"] = df.index.astype(str)
+        return df, "__name__"
+    return df, name_col
+
+
+def _aggregate_for_chart(df: pd.DataFrame, label_col: str, value_col: str) -> pd.DataFrame:
+    """Aggregate a holdings frame so every label is unique.
+
+    ARK CSVs can include several rows with the same ticker (or NaN
+    tickers) for different share classes, warrants, and private
+    placements. Plotly's hierarchical charts (treemap) treat duplicate
+    labels as non-leaf internal nodes and raise an error. We sum the
+    value column per label and drop rows missing the label entirely.
+    """
+    work = df[[label_col, value_col]].copy()
+    work = work.dropna(subset=[label_col])
+    work = work.groupby(label_col, as_index=False, dropna=False)[value_col].sum()
+    return work
+
 
 def holdings_bar(df: pd.DataFrame, value_col: str = "weight", name_col: Optional[str] = None) -> go.Figure:
     """Horizontal bar chart of holdings sorted by weight.
 
+    Labels default to the ticker column (``ticker`` / ``symbol`` /
+    ``cusip``) when present, otherwise the company name, otherwise the
+    index. Rows with NaN labels are dropped; rows with duplicate
+    labels are summed.
+
     Args:
         df: Holdings DataFrame.
         value_col: Column holding the weight (or market value).
-        name_col: Column with the company name. Falls back to the first
-            non-numeric column, then to the index.
+        name_col: Optional explicit override for the label column.
     """
-    if name_col is None:
-        for col in df.columns:
-            if col == value_col:
-                continue
-            if df[col].dtype == object:
-                name_col = col
-                break
-        if name_col is None:
-            df = df.copy()
-            df["__name__"] = df.index.astype(str)
-            name_col = "__name__"
+    name_col = _pick_label_col(df, value_col, name_col)
+    df, name_col = _ensure_label(df, value_col, name_col)
+    df = _aggregate_for_chart(df, name_col, value_col)
 
     sorted_df = df.sort_values(value_col, ascending=True)
     fig = px.bar(
@@ -54,16 +105,15 @@ def holdings_bar(df: pd.DataFrame, value_col: str = "weight", name_col: Optional
 
 
 def holdings_treemap(df: pd.DataFrame, value_col: str = "weight", name_col: Optional[str] = None) -> go.Figure:
-    """Treemap of holdings sized by ``value_col``."""
-    if name_col is None:
-        for col in df.columns:
-            if col != value_col and df[col].dtype == object:
-                name_col = col
-                break
-        if name_col is None:
-            df = df.copy()
-            df["__name__"] = df.index.astype(str)
-            name_col = "__name__"
+    """Treemap of holdings sized by ``value_col``.
+
+    Same label-resolution rules as :func:`holdings_bar`. Aggregation
+    is required here because Plotly's hierarchical charts treat
+    duplicate path labels as internal nodes and refuse to render.
+    """
+    name_col = _pick_label_col(df, value_col, name_col)
+    df, name_col = _ensure_label(df, value_col, name_col)
+    df = _aggregate_for_chart(df, name_col, value_col)
 
     fig = px.treemap(df, path=[name_col], values=value_col, height=500)
     fig.update_layout(margin={"l": 10, "r": 10, "t": 30, "b": 10})
