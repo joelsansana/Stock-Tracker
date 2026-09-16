@@ -6,8 +6,16 @@
 #
 # share.streamlit.io auto-detects this file. It installs the local
 # python_stocks package in editable mode (pulling in the runtime deps
-# declared in pyproject.toml) plus the UI-only deps that aren't core.
+# declared in pyproject.toml) plus the UI deps: streamlit, plotly, and
+# the Hugging Face backend (transformers + torch CPU build).
+#
+# The HF backend is what powers the Sentiment Lab's neural scorer.
+# On Streamlit Cloud the first model load downloads ~250 MB on top of
+# the libraries; budget for a slower first request.
 
+--extra-index-url https://download.pytorch.org/whl/cpu
 -e .
 streamlit>=1.30
 plotly>=5.18
+transformers>=4.20.0
+torch>=1.9.0

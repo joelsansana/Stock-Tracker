@@ -105,28 +105,34 @@ is lost on restart or redeploy. This affects:
 For persistent storage, use an external database (Postgres, Supabase,
 Turso, …) or object storage (S3, R2). Out of scope for this guide.
 
-## Optional: enable Hugging Face
+## Hugging Face backend
 
-The Sentiment Lab uses TextBlob by default. To enable the neural
-Hugging Face backend on Cloud:
+The Sentiment Lab uses both TextBlob (lexicon) and Hugging Face
+(neural) backends. On Cloud, both are installed by default:
 
-1. In **Advanced settings** during (re)deploy, the build can be
-   customized. Streamlit Cloud doesn't easily support extras, so
-   the cleanest path is to add the dep to `requirements.txt`:
+- `transformers` and `torch` (CPU build, via PyTorch's CPU wheel
+  index) are listed in `requirements.txt`.
+- The first time a user clicks **Load model** in the Sentiment Lab
+  sidebar, the chosen preset downloads (~250 MB for DistilBERT
+  SST-2, ~440 MB for FinBERT). This is cached by Streamlit for
+  the life of the process; subsequent loads are instant.
 
-   ```text
-   -e .
-   streamlit>=1.30
-   plotly>=5.18
-   transformers>=4.20.0
-   torch>=1.9.0
-   ```
+Cost on the free tier:
 
-2. Commit, push, and Cloud rebuilds. Note this adds ~250 MB and
-   significantly increases cold-start time.
+- **Disk:** torch CPU is ~200 MB, transformers and friends another
+  ~50 MB. Well within Streamlit Cloud's limits.
+- **Memory:** the loaded DistilBERT model is ~250 MB. The free tier
+  caps at 1 GB; you'll see roughly 600 MB used after a model load.
+- **Cold start:** first request after a redeploy pays ~30–60 s for
+  pip + the model download. Subsequent requests are fast.
 
-If you'd rather not pay the cost on the free tier, leave
-TextBlob as the only backend — it's already wired up and works
+If you fork the project and want a leaner deploy, remove
+`transformers` and `torch` from `requirements.txt`. The Sentiment
+Lab will silently fall back to TextBlob (still useful, just less
+accurate).
+
+The original note about how to enable HF manually is now obsolete;
+it's enabled out of the box.
 out of the box.
 
 ## Monitoring
@@ -137,6 +143,16 @@ out of the box.
   menu. Free tier caps at 1 GB RAM.
 - **Reboot:** **⋮ → Reboot** restarts the app and clears in-memory
   caches without a code change.
+
+### First request after a model load
+
+The Hugging Face model weights are downloaded on first use (the
+"Load model" button in the Sentiment Lab). The download can take
+30–60 seconds for the default DistilBERT model. After the first
+download, weights are cached for the rest of the process lifetime.
+
+If a request seems stuck, check **Logs** — you'll see the
+HuggingFace Hub download progress.
 
 ## Updating
 
@@ -161,5 +177,5 @@ Not supported on the free tier. The default URL is
 | `ModuleNotFoundError: No module named 'python_stocks'` | The `-e .` line didn't run. Verify `pyproject.toml` is at the repo root and `[tool.setuptools.packages.find] where = ["src"]` is set. |
 | `ModuleNotFoundError: No module named 'app'` | Page file is missing `import _bootstrap  # noqa: F401` as its first import. |
 | Twitter page says "no token" | Secrets aren't saved correctly. Settings → Secrets → paste TOML → Save. |
-| Memory exceeded | HF model loaded by accident. Skip the "Load model" button on Cloud; default to TextBlob. |
+| Memory exceeded | The HF backend uses ~600 MB after a model load on the free tier. If you hit the 1 GB cap, remove `transformers`/`torch` from `requirements.txt` to disable the neural backend. |
 | Cold start > 30s | First request pays the cost of pip cache miss + Python startup. Subsequent requests are fast. |
