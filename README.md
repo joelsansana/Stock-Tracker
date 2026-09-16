@@ -1,7 +1,12 @@
 # Python Stocks 📈
 
+### 👉 **[Try the live demo → https://stock-ark-tracker.streamlit.app](https://stock-ark-tracker.streamlit.app)** 👈
+
 Stock analysis toolkit: ARK ETF holdings, market data, technical
-indicators, and sentiment analysis.
+indicators, and sentiment analysis — with a hosted Streamlit UI
+that's free to use, no install required.
+
+---
 
 > **Note:** This is the package formerly known as `python_stocks`. The
 > importable package name is now `python_stocks` (the source lives in
