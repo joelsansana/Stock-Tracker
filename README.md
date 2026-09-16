@@ -175,6 +175,25 @@ streamlit run app/Home.py
 
 Then open <http://localhost:8501>.
 
+### Deploying to Streamlit Community Cloud
+
+`requirements.txt` is wired for [share.streamlit.io](https://share.streamlit.io):
+
+1. Push to `main` (or your default branch).
+2. On Streamlit Cloud, click **Create app** → pick the repo,
+   branch `main`, main file `app/Home.py`.
+3. Under **Advanced settings** → **Secrets**, paste:
+   ```toml
+   TWEET_BEARER_TOKEN = "your-twitter-v2-bearer-token"
+   ```
+4. Deploy. Cloud reads `requirements.txt`, installs the local
+   package and Streamlit/Plotly, and serves the app at
+   `<subdomain>.streamlit.app`.
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full guide
+(secret management, persistence caveats, Hugging Face on Cloud,
+troubleshooting).
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -188,7 +207,7 @@ Then open <http://localhost:8501>.
 
 ## Requirements
 
-Python 3.8+. Runtime dependencies are listed in
+Python 3.10+ (required by Streamlit ≥ 1.30). Runtime dependencies are listed in
 [`requirements.txt`](requirements.txt); everything heavier
 (`transformers`, `torch`, `tweepy`, …) lives in optional extras in
 [`pyproject.toml`](pyproject.toml).
