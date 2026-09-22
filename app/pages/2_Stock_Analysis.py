@@ -81,7 +81,15 @@ def _render_single(period: str, interval: str, indicators: dict[str, bool]) -> N
         st.info("Enter a ticker in the sidebar to begin.")
         return
 
-    df = fetch_price(raw_ticker, period, interval)
+    force_refresh = st.sidebar.checkbox(
+        "Force refresh",
+        value=False,
+        help="Bypass the cached response and re-download from yfinance. "
+        "Useful when yfinance returned no data and the error has been "
+        "cached for an hour.",
+    )
+
+    df = fetch_price(raw_ticker, period, interval, force_refresh=force_refresh)
     if df is None or df.empty:
         st.error(
             f"No data returned for **{raw_ticker}** "
@@ -91,7 +99,9 @@ def _render_single(period: str, interval: str, indicators: dict[str, bool]) -> N
             "Troubleshooting:\n"
             "- Check the ticker is valid on Yahoo Finance.\n"
             "- Some tickers don't support intervals smaller than `1d`.\n"
-            "- Intraday data (`1m`, `5m`, `15m`, etc.) is limited to the last 60 days."
+            "- Intraday data (`1m`, `5m`, `15m`, etc.) is limited to the last 60 days.\n"
+            "- Yahoo may have rate-limited this server. Tick **Force refresh** "
+            "above to retry once the upstream is reachable again."
         )
         return
 

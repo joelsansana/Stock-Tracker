@@ -9,6 +9,7 @@ Thin wrapper around :mod:`yfinance` for price history plus a small
 from __future__ import annotations
 
 import logging
+import time
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -30,6 +31,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 1.0
+
 
 class StockDataFetcher:
     """Fetch and persist stock market data via :mod:`yfinance`.
@@ -49,6 +53,8 @@ class StockDataFetcher:
         ticker: str,
         period: str = "1y",
         interval: str = "1d",
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_delay: float = DEFAULT_RETRY_DELAY,
     ) -> Optional[pd.DataFrame]:
         """Get historical OHLCV data for a ticker.
 
@@ -56,6 +62,9 @@ class StockDataFetcher:
             ticker: Ticker symbol, e.g. ``"AAPL"``.
             period: ``1d|5d|1mo|3mo|6mo|1y|2y|5y|10y|ytd|max``.
             interval: ``1m|2m|5m|15m|30m|60m|1h|1d|1wk|1mo``.
+            max_retries: Number of attempts on transient yfinance errors
+                (network issues, rate limits). Set to ``1`` to disable.
+            retry_delay: Initial backoff in seconds; doubled each retry.
 
         Returns:
             OHLCV DataFrame indexed by date, or ``None`` on failure.
@@ -64,24 +73,54 @@ class StockDataFetcher:
             logger.error("yfinance not available")
             return None
 
-        try:
-            df = yf.Ticker(ticker).history(period=period, interval=interval)
-        except Exception as exc:  # yfinance raises many bespoke subclasses
-            logger.error("Error fetching %s: %s", ticker, exc)
-            return None
+        last_exc: Optional[BaseException] = None
+        for attempt in range(max_retries):
+            try:
+                df = yf.Ticker(ticker).history(period=period, interval=interval)
+            except Exception as exc:  # yfinance raises many bespoke subclasses
+                last_exc = exc
+                logger.warning(
+                    "Fetch attempt %d/%d for %s failed: %s",
+                    attempt + 1, max_retries, ticker, exc,
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (2 ** attempt))
+                continue
 
-        if df.empty:
-            logger.warning("No data returned for %s", ticker)
-            return None
+            if df.empty:
+                logger.warning(
+                    "No data returned for %s (attempt %d/%d)",
+                    ticker, attempt + 1, max_retries,
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (2 ** attempt))
+                continue
 
-        logger.info("Fetched %d rows for %s", len(df), ticker)
-        return df
+            if attempt > 0:
+                logger.info(
+                    "Fetched %d rows for %s on attempt %d",
+                    len(df), ticker, attempt + 1,
+                )
+            else:
+                logger.info("Fetched %d rows for %s", len(df), ticker)
+            return df
+
+        if last_exc is not None:
+            logger.error(
+                "Giving up on %s after %d attempts; last error: %s",
+                ticker, max_retries, last_exc,
+            )
+        else:
+            logger.error("Giving up on %s after %d empty attempts", ticker, max_retries)
+        return None
 
     def get_multiple_prices(
         self,
         tickers: List[str],
         period: str = "1y",
         interval: str = "1d",
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_delay: float = DEFAULT_RETRY_DELAY,
     ) -> Dict[str, pd.DataFrame]:
         """Get historical OHLCV data for several tickers in one round-trip.
 
@@ -95,34 +134,59 @@ class StockDataFetcher:
         if not tickers:
             return {}
 
-        try:
-            data = yf.download(
-                tickers,
-                period=period,
-                interval=interval,
-                progress=False,
-                auto_adjust=True,
-                group_by="column",
+        last_exc: Optional[BaseException] = None
+        data = pd.DataFrame()
+        for attempt in range(max_retries):
+            try:
+                data = yf.download(
+                    tickers,
+                    period=period,
+                    interval=interval,
+                    progress=False,
+                    auto_adjust=True,
+                    group_by="column",
+                )
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(
+                    "Batch fetch attempt %d/%d for %s failed: %s",
+                    attempt + 1, max_retries, tickers, exc,
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (2 ** attempt))
+                continue
+
+            if not data.empty:
+                break
+
+            logger.warning(
+                "Batch fetch attempt %d/%d for %s returned empty",
+                attempt + 1, max_retries, tickers,
             )
-        except Exception as exc:
-            logger.error("Error fetching %s: %s", tickers, exc)
-            return {}
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (2 ** attempt))
 
         results: Dict[str, pd.DataFrame] = {}
         if data.empty:
-            logger.warning("No data returned for %s", tickers)
+            if last_exc is not None:
+                logger.error(
+                    "Giving up on %s after %d attempts; last error: %s",
+                    tickers, max_retries, last_exc,
+                )
+            else:
+                logger.warning("No data returned for %s", tickers)
             return results
 
         for ticker in tickers:
             try:
-                if len(tickers) == 1:
-                    df = data
-                else:
-                    df = data.xs(ticker, axis=1, level=1)
-                if not df.empty:
-                    results[ticker] = df
+                # yfinance returns a MultiIndex even for a single ticker
+                # under group_by="column"; xs() unifies both cases.
+                df = data.xs(ticker, axis=1, level=1)
             except (KeyError, ValueError) as exc:
                 logger.warning("No data for %s: %s", ticker, exc)
+                continue
+            if not df.empty:
+                results[ticker] = df
         return results
 
     def get_info(self, ticker: str) -> Optional[Dict]:

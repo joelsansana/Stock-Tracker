@@ -61,12 +61,13 @@ def fetch_ark(ticker: str, force_refresh: bool) -> Any:
 
 
 @st.cache_data(ttl=PRICE_TTL_LONG, show_spinner="Fetching price data…")
-def fetch_price(ticker: str, period: str, interval: str) -> Any:
+def fetch_price(ticker: str, period: str, interval: str, force_refresh: bool = False) -> Any:
     """Cached wrapper around :meth:`StockDataFetcher.get_price`.
 
     Streamlit's ``@st.cache_data`` TTL is fixed at decoration time, so
-    we use a single one-hour TTL regardless of period. Short-period
-    users can hit the on-page "Refresh" button to bypass.
+    we use a single one-hour TTL regardless of period. ``force_refresh``
+    is part of the cache key, so flipping it lets the page bypass any
+    cached ``None`` from a previous failed fetch.
     """
     fetcher = StockDataFetcher(data_dir=data_dir())
     try:
