@@ -89,7 +89,10 @@ def _render_single(period: str, interval: str, indicators: dict[str, bool]) -> N
         "cached for an hour.",
     )
 
-    df = fetch_price(raw_ticker, period, interval, force_refresh=force_refresh)
+    if force_refresh:
+        # Bypass any cached failure from a previous yfinance outage.
+        fetch_price.clear()
+    df = fetch_price(raw_ticker, period, interval)
     if df is None or df.empty:
         st.error(
             f"No data returned for **{raw_ticker}** "
