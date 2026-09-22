@@ -110,11 +110,19 @@ def _render_single(period: str, interval: str, indicators: dict[str, bool]) -> N
         if err is not None:
             with st.expander("Error details", expanded=False):
                 st.code(str(err))
-                st.caption(
-                    f"attempts={err.attempts}  "
-                    f"empty_response={err.empty}  "
-                    f"last_exception={type(err.last_exc).__name__ if err.last_exc else '—'}"
-                )
+                # Duck-type the rich attributes so this works whether the
+                # deployed python_stocks has the new StockFetchError or not.
+                attempts = getattr(err, "attempts", None)
+                empty = getattr(err, "empty", None)
+                last_exc = getattr(err, "last_exc", None)
+                if any(v is not None for v in (attempts, empty, last_exc)):
+                    st.caption(
+                        f"attempts={attempts}  "
+                        f"empty_response={empty}  "
+                        f"last_exception={type(last_exc).__name__ if last_exc else '—'}"
+                    )
+                else:
+                    st.caption(f"exception_type={type(err).__name__}")
         return
 
     df = _decorate(df, indicators)

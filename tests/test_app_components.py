@@ -166,6 +166,100 @@ def test_last_fetch_error_stored_on_failure_and_cleared_on_success(tmp_path, mon
     assert cache_mod.last_fetch_error(*key_fail) is not None
 
 
+def test_fetch_price_stashes_error_when_get_price_returns_none(tmp_path, monkeypatch) -> None:
+    """Older ``get_price`` returned None silently; we synthesize an error for the UI."""
+    import app.components.cache as cache_mod
+
+    monkeypatch.setenv("PYTHON_STOCKS_DATA_DIR", str(tmp_path))
+    cache_mod.fetch_price.clear()
+    cache_mod._LAST_FETCH_ERROR.clear()
+
+    class OldStyleFetcher:
+        def __init__(self, *a, **kw):
+            pass
+
+        def get_price(self, ticker, period="1y", interval="1d"):
+            return None  # old behavior: silent None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cache_mod, "StockDataFetcher", OldStyleFetcher)
+
+    df = cache_mod.fetch_price("AAPL", "1y", "1d")
+    assert df is None
+    err = cache_mod.last_fetch_error("AAPL", "1y", "1d")
+    assert err is not None
+    assert err.ticker == "AAPL"
+    assert err.empty is True
+    assert err.last_exc is None
+
+
+def test_fetch_price_catches_plain_exception(tmp_path, monkeypatch) -> None:
+    """If get_price raises something other than StockFetchError, we still stash it."""
+    import app.components.cache as cache_mod
+
+    monkeypatch.setenv("PYTHON_STOCKS_DATA_DIR", str(tmp_path))
+    cache_mod.fetch_price.clear()
+    cache_mod._LAST_FETCH_ERROR.clear()
+
+    boom = ValueError("weird data shape")
+
+    class WeirdFetcher:
+        def __init__(self, *a, **kw):
+            pass
+
+        def get_price(self, ticker, period="1y", interval="1d"):
+            raise boom
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cache_mod, "StockDataFetcher", WeirdFetcher)
+
+    df = cache_mod.fetch_price("AAPL", "1y", "1d")
+    assert df is None
+    err = cache_mod.last_fetch_error("AAPL", "1y", "1d")
+    # Stash whatever we got; UI duck-types on .attempts / .empty / .last_exc.
+    assert err is boom
+
+
+def test_cache_module_loads_when_stock_fetch_error_missing(tmp_path, monkeypatch) -> None:
+    """Module import must not fail if python_stocks.stock_data is stale (no StockFetchError).
+
+    Reproduces the Streamlit Cloud ImportError where a partial deploy leaves the
+    submodule without the new class.
+    """
+    monkeypatch.setenv("PYTHON_STOCKS_DATA_DIR", str(tmp_path))
+    # Simulate a stale submodule by reloading cache.py with StockFetchError blocked.
+    import importlib
+    import sys
+
+    # Hide StockFetchError on the submodule so the import falls back.
+    import python_stocks.stock_data as sd
+
+    real_has = hasattr(sd, "StockFetchError")
+    if real_has:
+        # Temporarily pop the class so the ``except ImportError`` branch triggers.
+        sentinel = sd.StockFetchError
+        delattr(sd, "StockFetchError")
+        try:
+            sys.modules.pop("app.components.cache", None)
+            cache_mod = importlib.import_module("app.components.cache")
+            # The local fallback must exist and have the same shape.
+            assert hasattr(cache_mod, "StockFetchError")
+            err = cache_mod.StockFetchError("AAPL", attempts=2)
+            assert err.ticker == "AAPL"
+            assert err.attempts == 2
+        finally:
+            sd.StockFetchError = sentinel
+    else:
+        # Already absent in this environment; the fallback path is exercised.
+        sys.modules.pop("app.components.cache", None)
+        cache_mod = importlib.import_module("app.components.cache")
+        assert hasattr(cache_mod, "StockFetchError")
+
+
 # --- Holdings chart label resolution -----------------------------------------
 
 

@@ -14,7 +14,26 @@ from app.components.cache import data_dir, last_fetch_error
 from app.components.shared import backend_status, package_version, sidebar_nav
 
 # Import from submodule directly; see app/components/cache.py for why.
-from python_stocks.stock_data import StockDataFetcher, StockFetchError
+from python_stocks.stock_data import StockDataFetcher
+
+try:
+    from python_stocks.stock_data import StockFetchError
+
+    _STOCK_FETCH_ERROR_SOURCE = "python_stocks.stock_data.StockFetchError"
+except ImportError:
+    # Stale deploy fallback. Same shape as the real class so the probe
+    # below can still extract attempts/empty/last_exc attributes.
+    class StockFetchError(Exception):  # type: ignore[no-redef]
+        def __init__(self, ticker: str = "?", attempts: int = 0,
+                     last_exc: BaseException | None = None, empty: bool = False) -> None:
+            msg = f"yfinance fetch failed for {ticker!r} (stale deploy)"
+            super().__init__(msg)
+            self.ticker = ticker
+            self.attempts = attempts
+            self.last_exc = last_exc
+            self.empty = empty
+
+    _STOCK_FETCH_ERROR_SOURCE = "local fallback (deployed python_stocks is stale)"
 
 
 def main() -> None:
@@ -109,6 +128,7 @@ def _render_yfinance_probe() -> None:
         fetcher = StockDataFetcher(data_dir=data_dir())
         try:
             t0 = time.perf_counter()
+            df = None
             try:
                 df = fetcher.get_price("AAPL", period="5d", interval="1d", max_retries=1)
             except StockFetchError as exc:
@@ -121,10 +141,23 @@ def _render_yfinance_probe() -> None:
                 if exc.last_exc is not None:
                     with st.expander("Last exception", expanded=False):
                         st.code(repr(exc.last_exc))
-            else:
+            except Exception as exc:  # old deploys raise plain Exception
                 elapsed = time.perf_counter() - t0
-                st.success(f"Fetched {len(df)} rows in {elapsed:.2f}s")
-                st.dataframe(df.tail(5), use_container_width=True)
+                st.error(f"Failed in {elapsed:.2f}s: {type(exc).__name__}: {exc}")
+                with st.expander("Last exception", expanded=False):
+                    st.code(repr(exc))
+            else:
+                if df is None:
+                    # Older get_price returned None instead of raising.
+                    elapsed = time.perf_counter() - t0
+                    st.error(
+                        f"Failed in {elapsed:.2f}s: get_price returned None "
+                        "(deployed python_stocks may be an older version)."
+                    )
+                else:
+                    elapsed = time.perf_counter() - t0
+                    st.success(f"Fetched {len(df)} rows in {elapsed:.2f}s")
+                    st.dataframe(df.tail(5), use_container_width=True)
         finally:
             fetcher.close()
     else:

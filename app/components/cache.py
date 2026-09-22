@@ -13,17 +13,43 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import streamlit as st
 
-# Import from submodules rather than the package root: Streamlit Cloud has
-# shown a tendency to cache the package's __init__.py bytecode across
-# rebuilds, which makes freshly-added top-level exports invisible until
-# the cache is manually busted. The submodule is small enough that the
-# extra path segment is a worthwhile trade for import-time robustness.
+# Import from submodules rather than the package root. Streamlit Cloud
+# has shown a tendency to cache the package's __init__.py bytecode
+# across rebuilds, which can leave freshly-added top-level exports
+# invisible for a deploy cycle.
 from python_stocks.ark_fetcher import ARKDataFetcher
-from python_stocks.stock_data import StockDataFetcher, StockFetchError
+from python_stocks.stock_data import StockDataFetcher
+
+try:
+    from python_stocks.stock_data import StockFetchError
+
+    _STOCK_FETCH_ERROR_SOURCE = "python_stocks.stock_data.StockFetchError"
+except ImportError:
+    # Streamlit Cloud may also be running a deploy where the *submodule*
+    # itself is stale (the previous commit introduced this class). Use a
+    # local fallback so this module still loads; UI code that cares
+    # about the rich attributes will fall back to ``str(exc)``.
+    class StockFetchError(Exception):  # type: ignore[no-redef]
+        """Fallback used when the deployed ``python_stocks`` is stale."""
+
+        def __init__(self, ticker: str = "?", attempts: int = 0,
+                     last_exc: Optional[BaseException] = None, empty: bool = False) -> None:
+            msg = (
+                f"yfinance fetch failed for {ticker!r} "
+                f"(attempts={attempts}, empty={empty}, "
+                f"last_error={type(last_exc).__name__ if last_exc else '—'})"
+            )
+            super().__init__(msg)
+            self.ticker = ticker
+            self.attempts = attempts
+            self.last_exc = last_exc
+            self.empty = empty
+
+    _STOCK_FETCH_ERROR_SOURCE = "local fallback (deployed python_stocks is stale)"
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +62,7 @@ _SHORT_PERIODS = {"1d", "5d", "1mo"}
 # Last fetch error per (ticker, period, interval) so the UI can surface
 # the underlying yfinance failure instead of a generic "no data" message.
 # Cleared on the next successful fetch for the same key.
-_LAST_FETCH_ERROR: Dict[Tuple[str, str, str], StockFetchError] = {}
+_LAST_FETCH_ERROR: Dict[Tuple[str, str, str], BaseException] = {}
 
 
 def data_dir() -> Path:
@@ -83,25 +109,47 @@ def fetch_price(ticker: str, period: str, interval: str) -> Any:
     cache (e.g. after a transient upstream failure), call
     :func:`fetch_price.clear` before invoking this function.
 
-    On failure, the :class:`StockFetchError` is stashed via
-    :func:`last_fetch_error` and ``None`` is returned so the page can
-    keep its existing "no data" UX while still surfacing the detail.
+    On failure (whether the new ``StockFetchError`` or any other
+    exception, including the older "returns ``None`` silently" behavior),
+    the underlying exception is stashed via :func:`last_fetch_error` and
+    ``None`` is returned so the page keeps its existing "no data" UX
+    while still surfacing the detail.
     """
     fetcher = StockDataFetcher(data_dir=data_dir())
+    key = (ticker, period, interval)
     try:
         df = fetcher.get_price(ticker, period=period, interval=interval)
-    except StockFetchError as exc:
-        _LAST_FETCH_ERROR[(ticker, period, interval)] = exc
-        logger.warning("fetch_price(%s, %s, %s) failed: %s", ticker, period, interval, exc)
+    except BaseException as exc:  # noqa: BLE001 — stash anything yfinance raises
+        _LAST_FETCH_ERROR[key] = exc
+        logger.warning(
+            "fetch_price(%s, %s, %s) raised %s: %s",
+            ticker, period, interval, type(exc).__name__, exc,
+        )
         return None
     finally:
         fetcher.close()
-    _LAST_FETCH_ERROR.pop((ticker, period, interval), None)
+
+    if df is None:
+        # Older ``get_price`` returns ``None`` instead of raising. Synthesize
+        # an error so the UI can still show something useful.
+        synthetic = StockFetchError(ticker=ticker, attempts=0, last_exc=None, empty=True)
+        _LAST_FETCH_ERROR[key] = synthetic
+        logger.warning("fetch_price(%s, %s, %s) returned None", ticker, period, interval)
+        return None
+
+    _LAST_FETCH_ERROR.pop(key, None)
     return df
 
 
-def last_fetch_error(ticker: str, period: str, interval: str) -> StockFetchError | None:
-    """Return the most recent :class:`StockFetchError` for a fetch key, if any."""
+def last_fetch_error(ticker: str, period: str, interval: str) -> Optional[BaseException]:
+    """Return the most recent fetch exception for a key, if any.
+
+    The exception type depends on what the deployed ``python_stocks``
+    raised — typically :class:`StockFetchError`, but possibly a plain
+    ``Exception`` if the package is stale. UI code should duck-type on
+    ``.attempts`` / ``.empty`` / ``.last_exc`` rather than relying on a
+    specific class.
+    """
     return _LAST_FETCH_ERROR.get((ticker, period, interval))
 
 
