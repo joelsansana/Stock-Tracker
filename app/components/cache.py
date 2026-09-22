@@ -11,18 +11,26 @@ The module imports Streamlit lazily so it remains importable in tests.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Tuple
 
 import streamlit as st
 
-from python_stocks import ARKDataFetcher, StockDataFetcher
+from python_stocks import ARKDataFetcher, StockDataFetcher, StockFetchError
+
+logger = logging.getLogger(__name__)
 
 ARK_TTL_SECONDS = 60 * 60  # 1 hour
 PRICE_TTL_SHORT = 60 * 5    # 5 min for intraday
 PRICE_TTL_LONG = 60 * 60    # 1 hour otherwise
 
 _SHORT_PERIODS = {"1d", "5d", "1mo"}
+
+# Last fetch error per (ticker, period, interval) so the UI can surface
+# the underlying yfinance failure instead of a generic "no data" message.
+# Cleared on the next successful fetch for the same key.
+_LAST_FETCH_ERROR: Dict[Tuple[str, str, str], StockFetchError] = {}
 
 
 def data_dir() -> Path:
@@ -68,12 +76,27 @@ def fetch_price(ticker: str, period: str, interval: str) -> Any:
     we use a single one-hour TTL regardless of period. To bypass the
     cache (e.g. after a transient upstream failure), call
     :func:`fetch_price.clear` before invoking this function.
+
+    On failure, the :class:`StockFetchError` is stashed via
+    :func:`last_fetch_error` and ``None`` is returned so the page can
+    keep its existing "no data" UX while still surfacing the detail.
     """
     fetcher = StockDataFetcher(data_dir=data_dir())
     try:
-        return fetcher.get_price(ticker, period=period, interval=interval)
+        df = fetcher.get_price(ticker, period=period, interval=interval)
+    except StockFetchError as exc:
+        _LAST_FETCH_ERROR[(ticker, period, interval)] = exc
+        logger.warning("fetch_price(%s, %s, %s) failed: %s", ticker, period, interval, exc)
+        return None
     finally:
         fetcher.close()
+    _LAST_FETCH_ERROR.pop((ticker, period, interval), None)
+    return df
+
+
+def last_fetch_error(ticker: str, period: str, interval: str) -> StockFetchError | None:
+    """Return the most recent :class:`StockFetchError` for a fetch key, if any."""
+    return _LAST_FETCH_ERROR.get((ticker, period, interval))
 
 
 def ttl_for(period: str) -> int:

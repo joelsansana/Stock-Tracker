@@ -35,6 +35,41 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 1.0
 
 
+class StockFetchError(Exception):
+    """Raised when yfinance cannot return data after all retries.
+
+    Carries enough context for the UI to surface the real failure
+    mode (rate-limit vs empty response vs network error) without
+    forcing callers to wrap every call in ``try/except``.
+    """
+
+    def __init__(
+        self,
+        ticker: str,
+        attempts: int,
+        last_exc: Optional[BaseException] = None,
+        empty: bool = False,
+    ) -> None:
+        if empty and last_exc is None:
+            msg = (
+                f"yfinance returned an empty response for {ticker!r} "
+                f"after {attempts} attempt(s). The ticker may be invalid "
+                f"or the requested range/interval may be unsupported."
+            )
+        elif last_exc is not None:
+            msg = (
+                f"yfinance failed for {ticker!r} after {attempts} attempt(s); "
+                f"last error: {type(last_exc).__name__}: {last_exc}"
+            )
+        else:
+            msg = f"yfinance failed for {ticker!r} after {attempts} attempt(s)"
+        super().__init__(msg)
+        self.ticker = ticker
+        self.attempts = attempts
+        self.last_exc = last_exc
+        self.empty = empty
+
+
 class StockDataFetcher:
     """Fetch and persist stock market data via :mod:`yfinance`.
 
@@ -68,10 +103,16 @@ class StockDataFetcher:
 
         Returns:
             OHLCV DataFrame indexed by date, or ``None`` on failure.
+
+        Raises:
+            StockFetchError: When yfinance cannot return data after the
+                retry budget is exhausted. The exception carries the
+                ticker, attempt count, last underlying exception (if any),
+                and whether every attempt returned an empty DataFrame.
+                ``yfinance`` not being installed also raises.
         """
         if not YFINANCE_AVAILABLE:
-            logger.error("yfinance not available")
-            return None
+            raise StockFetchError(ticker, attempts=0, last_exc=None, empty=False)
 
         last_exc: Optional[BaseException] = None
         for attempt in range(max_retries):
@@ -88,6 +129,7 @@ class StockDataFetcher:
                 continue
 
             if df.empty:
+                last_exc = None  # empty is not an exception
                 logger.warning(
                     "No data returned for %s (attempt %d/%d)",
                     ticker, attempt + 1, max_retries,
@@ -110,9 +152,13 @@ class StockDataFetcher:
                 "Giving up on %s after %d attempts; last error: %s",
                 ticker, max_retries, last_exc,
             )
-        else:
-            logger.error("Giving up on %s after %d empty attempts", ticker, max_retries)
-        return None
+            raise StockFetchError(
+                ticker, attempts=max_retries, last_exc=last_exc, empty=False
+            )
+        logger.error("Giving up on %s after %d empty attempts", ticker, max_retries)
+        raise StockFetchError(
+            ticker, attempts=max_retries, last_exc=None, empty=True
+        )
 
     def get_multiple_prices(
         self,
@@ -324,9 +370,12 @@ class TechnicalIndicators:
 
 if __name__ == "__main__":
     with StockDataFetcher() as fetcher:
-        aapl = fetcher.get_price("AAPL")
-        if aapl is not None:
-            print(aapl.tail())
-            close = aapl["Close"]
-            print("\nSMA(20):", TechnicalIndicators.sma(close, 20).iloc[-1])
-            print("RSI(14):", TechnicalIndicators.rsi(close).iloc[-1])
+        try:
+            aapl = fetcher.get_price("AAPL")
+        except StockFetchError as exc:
+            print(f"Failed to fetch AAPL: {exc}")
+            raise SystemExit(1)
+        print(aapl.tail())
+        close = aapl["Close"]
+        print("\nSMA(20):", TechnicalIndicators.sma(close, 20).iloc[-1])
+        print("RSI(14):", TechnicalIndicators.rsi(close).iloc[-1])

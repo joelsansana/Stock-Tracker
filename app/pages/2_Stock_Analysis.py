@@ -6,7 +6,7 @@ import _bootstrap  # noqa: F401  (sys.path setup; see app/_bootstrap.py)
 import pandas as pd
 import streamlit as st
 
-from app.components.cache import fetch_price
+from app.components.cache import fetch_price, last_fetch_error
 from app.components.charts import (
     indicator_subplot,
     normalized_compare,
@@ -106,6 +106,15 @@ def _render_single(period: str, interval: str, indicators: dict[str, bool]) -> N
             "- Yahoo may have rate-limited this server. Tick **Force refresh** "
             "above to retry once the upstream is reachable again."
         )
+        err = last_fetch_error(raw_ticker, period, interval)
+        if err is not None:
+            with st.expander("Error details", expanded=False):
+                st.code(str(err))
+                st.caption(
+                    f"attempts={err.attempts}  "
+                    f"empty_response={err.empty}  "
+                    f"last_exception={type(err.last_exc).__name__ if err.last_exc else '—'}"
+                )
         return
 
     df = _decorate(df, indicators)

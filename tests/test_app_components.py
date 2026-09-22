@@ -109,6 +109,63 @@ def test_data_dir_creates_directory(tmp_path, monkeypatch) -> None:
     assert result.is_dir()
 
 
+# --- last_fetch_error round-trip ---------------------------------------------
+
+
+def test_last_fetch_error_stored_on_failure_and_cleared_on_success(tmp_path, monkeypatch) -> None:
+    """``fetch_price`` stashes StockFetchError so the UI can show it; cleared on success."""
+    import app.components.cache as cache_mod
+    from python_stocks import StockFetchError
+
+    monkeypatch.setenv("PYTHON_STOCKS_DATA_DIR", str(tmp_path))
+    # Earlier tests in this module (and `test_pages_importable_with_only_app_on_path`)
+    # can populate fetch_price's Streamlit cache via the default AAPL/1y/1d
+    # call in 2_Stock_Analysis.main(); reset so the fake is actually invoked.
+    cache_mod.fetch_price.clear()
+    cache_mod._LAST_FETCH_ERROR.clear()
+
+    boom = RuntimeError("rate limited")
+    calls = {"n": 0}
+
+    class FakeFetcher:
+        def __init__(self, *a, **kw):
+            pass
+
+        def get_price(self, ticker, period="1y", interval="1d"):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise StockFetchError("AAPL", attempts=1, last_exc=boom, empty=False)
+            import pandas as pd
+            return pd.DataFrame(
+                {"Close": [1.0]},
+                index=pd.date_range("2024-01-01", periods=1),
+            )
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cache_mod, "StockDataFetcher", FakeFetcher)
+
+    key_fail = ("AAPL", "1y", "1d")
+    key_ok = ("MSFT", "1y", "1d")
+    assert cache_mod.last_fetch_error(*key_fail) is None
+
+    # First call: fetcher raises; cache stores None + stashes the error.
+    df = cache_mod.fetch_price(*key_fail)
+    assert df is None
+    err = cache_mod.last_fetch_error(*key_fail)
+    assert err is not None
+    assert err.ticker == "AAPL"
+    assert err.last_exc is boom
+
+    # Different key with the same fake: this call returns success.
+    df2 = cache_mod.fetch_price(*key_ok)
+    assert df2 is not None
+    assert cache_mod.last_fetch_error(*key_ok) is None
+    # The previous failure key is still tracked until that specific key succeeds.
+    assert cache_mod.last_fetch_error(*key_fail) is not None
+
+
 # --- Holdings chart label resolution -----------------------------------------
 
 

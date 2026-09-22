@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from python_stocks import StockDataFetcher
+from python_stocks import StockDataFetcher, StockFetchError
 
 
 def test_close_is_callable(tmp_path) -> None:
@@ -100,21 +100,52 @@ def test_get_price_retries_on_empty_response(tmp_path, monkeypatch) -> None:
     fetcher.close()
 
 
-def test_get_price_returns_none_when_all_attempts_fail(tmp_path, monkeypatch) -> None:
-    """All retries exhausted -> None, no crash."""
+def test_get_price_raises_stock_fetch_error_on_exception_exhaustion(tmp_path, monkeypatch) -> None:
+    """All retries exhausted on exceptions -> raises StockFetchError with last_exc set."""
+    import python_stocks.stock_data as mod
+
+    fetcher = StockDataFetcher(data_dir=tmp_path)
+    boom = RuntimeError("upstream down")
+
+    class FakeTicker:
+        def history(self, **_kwargs):
+            raise boom
+
+    monkeypatch.setattr(mod, "yf", type("M", (), {"Ticker": lambda _self, _t: FakeTicker()})())
+    monkeypatch.setattr(mod.time, "sleep", lambda _s: None)
+
+    with pytest.raises(StockFetchError) as excinfo:
+        fetcher.get_price("AAPL", max_retries=2, retry_delay=0.0)
+    err = excinfo.value
+    assert err.ticker == "AAPL"
+    assert err.attempts == 2
+    assert err.last_exc is boom
+    assert err.empty is False
+    assert "upstream down" in str(err)
+    fetcher.close()
+
+
+def test_get_price_raises_stock_fetch_error_on_empty_exhaustion(tmp_path, monkeypatch) -> None:
+    """All retries exhausted on empty responses -> raises StockFetchError with empty=True."""
     import python_stocks.stock_data as mod
 
     fetcher = StockDataFetcher(data_dir=tmp_path)
 
     class FakeTicker:
         def history(self, **_kwargs):
-            raise RuntimeError("upstream down")
+            return pd.DataFrame()  # always empty
 
     monkeypatch.setattr(mod, "yf", type("M", (), {"Ticker": lambda _self, _t: FakeTicker()})())
     monkeypatch.setattr(mod.time, "sleep", lambda _s: None)
 
-    df = fetcher.get_price("AAPL", max_retries=2, retry_delay=0.0)
-    assert df is None
+    with pytest.raises(StockFetchError) as excinfo:
+        fetcher.get_price("AAPL", max_retries=3, retry_delay=0.0)
+    err = excinfo.value
+    assert err.ticker == "AAPL"
+    assert err.attempts == 3
+    assert err.last_exc is None
+    assert err.empty is True
+    assert "empty response" in str(err)
     fetcher.close()
 
 
@@ -132,8 +163,8 @@ def test_get_price_max_retries_one_disables_retry(tmp_path, monkeypatch) -> None
 
     monkeypatch.setattr(mod, "yf", type("M", (), {"Ticker": lambda _self, _t: FakeTicker()})())
 
-    df = fetcher.get_price("AAPL", max_retries=1)
-    assert df is None
+    with pytest.raises(StockFetchError):
+        fetcher.get_price("AAPL", max_retries=1)
     assert calls["n"] == 1
     fetcher.close()
 

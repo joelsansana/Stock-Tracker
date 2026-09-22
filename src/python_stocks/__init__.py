@@ -7,12 +7,13 @@ downloading ARK ETF holdings, and running sentiment analysis.
 
 from .ark_fetcher import ARKDataFetcher
 from .sentiment import SentimentAnalyzer, StockSentimentFetcher
-from .stock_data import StockDataFetcher, TechnicalIndicators
+from .stock_data import StockDataFetcher, StockFetchError, TechnicalIndicators
 
 __all__ = [
     "ARKDataFetcher",
     "SentimentAnalyzer",
     "StockDataFetcher",
+    "StockFetchError",
     "StockSentimentFetcher",
     "TechnicalIndicators",
 ]
