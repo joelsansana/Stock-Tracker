@@ -17,7 +17,13 @@ from typing import Any, Callable, Dict, Tuple
 
 import streamlit as st
 
-from python_stocks import ARKDataFetcher, StockDataFetcher, StockFetchError
+# Import from submodules rather than the package root: Streamlit Cloud has
+# shown a tendency to cache the package's __init__.py bytecode across
+# rebuilds, which makes freshly-added top-level exports invisible until
+# the cache is manually busted. The submodule is small enough that the
+# extra path segment is a worthwhile trade for import-time robustness.
+from python_stocks.ark_fetcher import ARKDataFetcher
+from python_stocks.stock_data import StockDataFetcher, StockFetchError
 
 logger = logging.getLogger(__name__)
 

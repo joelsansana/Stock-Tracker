@@ -12,7 +12,9 @@ import streamlit as st
 
 from app.components.cache import data_dir, last_fetch_error
 from app.components.shared import backend_status, package_version, sidebar_nav
-from python_stocks import StockDataFetcher, StockFetchError
+
+# Import from submodule directly; see app/components/cache.py for why.
+from python_stocks.stock_data import StockDataFetcher, StockFetchError
 
 
 def main() -> None:
